@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>本日の体調チェック</title>
+
+  <!-- LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #ffffff;
+      color: #222;
+      font-size: 24px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-size: 32px;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .question-box {
+      margin-bottom: 36px;
+    }
+
+    .question-title {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 16px;
+    }
+
+    .option-button {
+      display: block;
+      width: 100%;
+      min-height: 76px;
+      margin: 12px 0;
+      padding: 16px;
+      font-size: 27px;
+      text-align: left;
+      border: 3px solid #cccccc;
+      border-radius: 16px;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .option-button.selected {
+      background: #dff3ff;
+      border-color: #2196f3;
+      font-weight: bold;
+    }
+
+    .submit-button {
+      display: block;
+      width: 100%;
+      min-height: 84px;
+      margin-top: 32px;
+      padding: 18px;
+      font-size: 30px;
+      font-weight: bold;
+      border: none;
+      border-radius: 18px;
+      background: #06c755;
+      color: white;
+    }
+
+    .submit-button:disabled {
+      background: #cccccc;
+      color: #777777;
+    }
+
+    .note {
+      font-size: 20px;
+      color: #666;
+      margin-top: 12px;
+      text-align: center;
+    }
+
+    .error-message {
+      color: #d32f2f;
+      font-size: 20px;
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>本日の体調チェック</h1>
+
+  <div class="question-box">
+    <div class="question-title">Q1 昨晩の睡眠は？</div>
+
+    <button class="option-button" onclick="selectAnswer('sleep', '😊 よく眠れた', this)">
+      😊 よく眠れた
+    </button>
+
+    <button class="option-button" onclick="selectAnswer('sleep', '😐 ふつう', this)">
+      😐 ふつう
+    </button>
+
+    <button class="option-button" onclick="selectAnswer('sleep', '😰 眠れなかった', this)">
+      😰 眠れなかった
+    </button>
+  </div>
+
+  <div class="question-box">
+    <div class="question-title">Q2 昨晩のお酒は？</div>
+
+    <button class="option-button" onclick="selectAnswer('alcohol', '🍺 たくさん飲んだ', this)">
+      🍺 たくさん飲んだ
+    </button>
+
+    <button class="option-button" onclick="selectAnswer('alcohol', '🥛 少し飲んだ', this)">
+      🥛 少し飲んだ
+    </button>
+
+    <button class="option-button" onclick="selectAnswer('alcohol', '🚫 飲まなかった', this)">
+      🚫 飲まなかった
+    </button>
+  </div>
+
+  <div class="question-box">
+    <div class="question-title">Q3 今日の調子は？</div>
+
+    <button class="option-button" onclick="selectAnswer('condition', '💪 頑張れる！', this)">
+      💪 頑張れる！
+    </button>
+
+    <button class="option-button" onclick="selectAnswer('condition', '🙂 ふつう', this)">
+      🙂 ふつう
+    </button>
+
+    <button class="option-button" onclick="selectAnswer('condition', '😔 ちょっとしんどい', this)">
+      😔 ちょっとしんどい
+    </button>
+  </div>
+
+  <button id="submitButton" class="submit-button" onclick="submitAnswers()" disabled>
+    回答を送信する
+  </button>
+
+  <div class="note">
+    すべての質問に答えると送信できます
+  </div>
+
+  <div id="errorMessage" class="error-message"></div>
+
+  <script>
+    // ====== ここを自分のGASウェブアプリURLに置き換える ======
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbydu_piZwxwIHtBAfmzqi17S0M2hXRIJduD1wfbTSdS07GiJelLHZTHgcoFbkuCgo9IGg/exec";
+
+    // ====== LIFF ID ======
+    const LIFF_ID = "2010523218-gbt0R7Qd";
+
+    const answers = {
+      sleep: null,
+      alcohol: null,
+      condition: null
+    };
+
+    let userProfile = null;
+
+    async function initLiff() {
+      try {
+        await liff.init({
+          liffId: LIFF_ID
+        });
+
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+
+        userProfile = await liff.getProfile();
+
+      } catch (error) {
+        console.error(error);
+        document.getElementById("errorMessage").textContent =
+          "LIFFの初期化でエラーが発生しました。LINEアプリ内から開いてください。";
+      }
+    }
+
+    function selectAnswer(questionKey, answerText, clickedButton) {
+      answers[questionKey] = answerText;
+
+      const questionBox = clickedButton.closest(".question-box");
+      const buttons = questionBox.querySelectorAll(".option-button");
+
+      buttons.forEach(button => {
+        button.classList.remove("selected");
+      });
+
+      clickedButton.classList.add("selected");
+
+      checkAllAnswered();
+    }
+
+    function checkAllAnswered() {
+      const allAnswered =
+        answers.sleep &&
+        answers.alcohol &&
+        answers.condition;
+
+      document.getElementById("submitButton").disabled = !allAnswered;
+    }
+
+    async function submitAnswers() {
+      const submitButton = document.getElementById("submitButton");
+      submitButton.disabled = true;
+      submitButton.textContent = "送信中です...";
+
+      const data = {
+        userId: userProfile ? userProfile.userId : "",
+        displayName: userProfile ? userProfile.displayName : "",
+        timestamp: new Date().toISOString(),
+        sleep: answers.sleep,
+        alcohol: answers.alcohol,
+        condition: answers.condition
+      };
+
+      try {
+        await fetch(GAS_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "text/plain"
+          },
+          body: JSON.stringify(data)
+        });
+
+        alert("回答ありがとうございました");
+
+        if (liff.isInClient()) {
+          liff.closeWindow();
+        } else {
+          submitButton.textContent = "送信しました";
+        }
+
+      } catch (error) {
+        console.error(error);
+        alert("送信に失敗しました。もう一度お試しください。");
+        submitButton.disabled = false;
+        submitButton.textContent = "回答を送信する";
+      }
+    }
+
+    initLiff();
+  </script>
+
+</body>
+</html>
